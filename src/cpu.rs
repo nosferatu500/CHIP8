@@ -23,9 +23,11 @@ pub struct Cpu {
 
   delay_timer: u8,
   
-  sound_timer: u8,
+  pub sound_timer: u8,
 
   delay_duration: Instant,
+
+  pub make_sound: bool,
 }
 
 impl Cpu {
@@ -51,6 +53,8 @@ impl Cpu {
       sound_timer: 0,
 
       delay_duration: Instant::now(),
+
+      make_sound: false,
     }
   }
 
@@ -80,7 +84,12 @@ impl Cpu {
           if self.delay_timer > 0 {
               self.delay_timer -= 1;
           }
+
+          self.make_sound = false;
           if self.sound_timer > 0 {
+            if self.sound_timer == 1 {
+                self.make_sound = true;
+            }
               self.sound_timer -= 1;
           }
           self.delay_duration = Instant::now();

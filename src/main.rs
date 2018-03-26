@@ -17,6 +17,71 @@ use sdl2::rect::{Rect};
 use sdl2::event::{Event};
 use sdl2::keyboard::Keycode;
 
+use sdl2::audio::{AudioCallback, AudioDevice, AudioSpecDesired};
+use sdl2::Sdl;
+
+pub struct SquareWave {
+    phase_inc: f32,
+    phase: f32,
+    volume: f32,
+}
+
+impl AudioCallback for SquareWave {
+    type Channel = f32;
+
+    fn callback(&mut self, out: &mut [f32]) {
+        for x in out.iter_mut() {
+            *x = match self.phase {
+                0.0...0.5 => self.volume,
+                _ => -self.volume
+            };
+            self.phase = (self.phase + self.phase_inc) % 1.0;
+        }
+    }
+}
+
+pub struct Beeper {
+    pub device: AudioDevice<SquareWave>,
+    duration: Duration,
+    start: Instant,
+}
+
+impl Beeper {
+    pub fn new(context: &Sdl, duration: Duration) -> Self {
+        let desired_spec = AudioSpecDesired {
+            freq: Some(24100),
+            channels: Some(1),
+            samples: None,
+        };
+        let sub = context.audio().unwrap();
+        let device = sub.open_playback(None, &desired_spec, |spec| {
+
+            SquareWave {
+                phase_inc: 440.0 / spec.freq as f32,
+                phase: 0.0,
+                volume: 0.25
+            }
+        }).unwrap();
+
+        Beeper {
+            device: device,
+            duration: duration,
+            start: Instant::now(),
+        }
+    }
+
+    pub fn set_beep(&mut self, enable: bool) {
+        if enable {
+            self.start = Instant::now();
+            self.device.resume();
+        } else {
+            if self.duration <= Instant::now().duration_since(self.start) {
+                self.device.pause();
+            }
+        }
+    }
+}
+
 fn main() {
     let rom_file = args().nth(1).unwrap();
 
@@ -51,6 +116,8 @@ fn main() {
 
     let mut events = sdl_context.event_pump().unwrap();
 
+    let mut beeper = Beeper::new(&sdl_context, Duration::from_millis(120));
+
     loop {
         now = Instant::now();
         if now - last_instruction > Duration::from_millis(2) {
@@ -64,7 +131,6 @@ fn main() {
            
                 let _ = renderer.set_draw_color(black);
                 let _ = renderer.clear();
-
 
                 for x in 0..64 {
                     for y in 0..32 {
@@ -81,6 +147,8 @@ fn main() {
                 let _ = renderer.present();
                 
                 last_screen = now.clone();
+
+                beeper.set_beep(cpu.make_sound);
             }
 
             for event in events.poll_iter() {
